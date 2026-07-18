@@ -1,0 +1,80 @@
+@PACKAGE_INIT@
+
+if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(aEngine_FOUND FALSE)
+    set(aEngine_NOT_FOUND_MESSAGE "aEngine 0.1 package supports x64 consumers only.")
+    return()
+endif()
+if(MSVC)
+    string(TOUPPER "${MSVC_CXX_ARCHITECTURE_ID}" aEngine_MSVC_ARCHITECTURE_ID)
+    if(NOT aEngine_MSVC_ARCHITECTURE_ID STREQUAL "X64")
+        set(aEngine_FOUND FALSE)
+        set(aEngine_NOT_FOUND_MESSAGE "aEngine 0.1 package supports the x64 architecture only.")
+        return()
+    endif()
+else()
+    string(TOUPPER "${CMAKE_SYSTEM_PROCESSOR}" aEngine_SYSTEM_PROCESSOR)
+    if(NOT aEngine_SYSTEM_PROCESSOR MATCHES "^(AMD64|X86_64)$")
+        set(aEngine_FOUND FALSE)
+        set(aEngine_NOT_FOUND_MESSAGE "aEngine 0.1 package supports the x64 architecture only.")
+        return()
+    endif()
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/aEngineTargets.cmake")
+
+set(aEngine_PACKAGE_PREFIX_DIR "${PACKAGE_PREFIX_DIR}")
+set(aEngine_BUILD_SHARED_LIBS @AENGINE_BUILD_SHARED_LIBS@)
+
+foreach(component Core Miniaudio XAudio2 OpenAL AllBackends)
+    if(TARGET "aEngine::${component}")
+        set("aEngine_${component}_FOUND" TRUE)
+    else()
+        set("aEngine_${component}_FOUND" FALSE)
+    endif()
+endforeach()
+
+function(aengine_stage_runtime_dependencies target_name)
+    if(NOT TARGET "${target_name}")
+        message(FATAL_ERROR "aengine_stage_runtime_dependencies requires an existing target.")
+    endif()
+
+    set(aengine_license "${aEngine_PACKAGE_PREFIX_DIR}/share/aEngine/LICENSE")
+    set(miniaudio_license "${aEngine_PACKAGE_PREFIX_DIR}/share/aEngine/ThirdParty/miniaudio-LICENSE.txt")
+    add_custom_command(TARGET "${target_name}" POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${target_name}>/ThirdParty"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${aengine_license}" "$<TARGET_FILE_DIR:${target_name}>/ThirdParty/aEngine-LICENSE.txt"
+        VERBATIM)
+
+    if(aEngine_BUILD_SHARED_LIBS)
+        add_custom_command(TARGET "${target_name}" POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                $<TARGET_RUNTIME_DLLS:${target_name}>
+                "$<TARGET_FILE_DIR:${target_name}>"
+            COMMAND_EXPAND_LISTS
+            VERBATIM)
+    endif()
+
+    if(EXISTS "${miniaudio_license}")
+        add_custom_command(TARGET "${target_name}" POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${miniaudio_license}" "$<TARGET_FILE_DIR:${target_name}>/ThirdParty/miniaudio-LICENSE.txt"
+            VERBATIM)
+    endif()
+
+    set(openal_runtime "${aEngine_PACKAGE_PREFIX_DIR}/bin/OpenAL32.dll")
+    set(openal_copying "${aEngine_PACKAGE_PREFIX_DIR}/share/aEngine/ThirdParty/COPYING")
+    set(openal_pffft "${aEngine_PACKAGE_PREFIX_DIR}/share/aEngine/ThirdParty/LICENSE-pffft")
+    set(openal_source "${aEngine_PACKAGE_PREFIX_DIR}/share/aEngine/ThirdParty/openal-soft-1.25.2-source.tar.bz2")
+    set(openal_source_notice "${aEngine_PACKAGE_PREFIX_DIR}/share/aEngine/ThirdParty/OpenAL-SOURCE.txt")
+    if(EXISTS "${openal_runtime}")
+        add_custom_command(TARGET "${target_name}" POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${openal_runtime}" "$<TARGET_FILE_DIR:${target_name}>/ThirdParty/OpenAL32.dll"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${openal_copying}" "$<TARGET_FILE_DIR:${target_name}>/ThirdParty/OpenAL-COPYING.txt"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${openal_pffft}" "$<TARGET_FILE_DIR:${target_name}>/ThirdParty/OpenAL-LICENSE-pffft.txt"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${openal_source}" "$<TARGET_FILE_DIR:${target_name}>/ThirdParty/openal-soft-1.25.2-source.tar.bz2"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${openal_source_notice}" "$<TARGET_FILE_DIR:${target_name}>/ThirdParty/OpenAL-SOURCE.txt"
+            VERBATIM)
+    endif()
+endfunction()
+
+check_required_components(aEngine)
